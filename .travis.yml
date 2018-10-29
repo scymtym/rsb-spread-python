@@ -1,12 +1,75 @@
 language: python
+dist: xenial
 python:
-  - 2.7
+  - 3.6
+  - 3.7
+sudo: yes
 before_install:
+  - sudo add-apt-repository ppa:maarten-fonville/protobuf -y
   - sudo add-apt-repository http://packages.cor-lab.de/ubuntu/
   - wget -q http://packages.cor-lab.de/keys/cor-lab.asc -O- | sudo apt-key add -
   - sudo apt-get update -q
   - sudo apt-get install spread protobuf-compiler
 install:
-  - pip install tox-travis
+  - pip install tox tox-travis codecov wheel
 script:
   - tox
+after_failure:
+  - cat .tox/*/log/*.log
+env:
+  - 'COVERAGE_COMMAND=codecov -e TOXENV'
+
+jobs:
+  include:
+    - stage: check
+      script:
+        - tox -e check
+      # erase coverage command, which is not needed for deploying
+      env:
+    - stage: archive
+      script:
+        - python setup.py bdist_wheel
+        - cd dist
+        - tar -czf "../rsb-spread-python-${TRAVIS_BRANCH}.tar.gz" rsb_spread_python-*.whl
+        - cd ..
+          # includePattern requires a capture group to enable regex mode
+        - |
+          cat << EOF > bintray.json
+          {
+            "package": {
+              "name": "rsb-spread-python",
+              "repo": "travis-artifacts",
+              "subject": "open-rsx",
+              "desc": "Travis artifact for branch ${TRAVIS_BRANCH}",
+              "vcs_url": "https://github.com/open-rsx/rsb-spread-python.git",
+              "licenses": ["LGPL-3.0"]
+            },
+
+            "version": {
+              "name": "travis-${TRAVIS_BRANCH}",
+              "vcs_tag": "${TRAVIS_BRANCH}"
+            },
+
+            "files": [
+              {
+                "includePattern": "\\./(rsb-spread-python-.*\\\\.tar.gz)",
+                "uploadPattern": "\$1",
+                "matrixParams": {
+                  "override": 1
+                }
+              }
+            ],
+            "publish": true
+          }
+          EOF
+      # erase coverage command, which is not needed for deploying
+      env:
+      deploy:
+        provider: bintray
+        file: "bintray.json"
+        user: "languitar"
+        key: '${BINTRAY_KEY}'
+        skip_cleanup: true
+        on:
+          repo: open-rsx/rsb-spread-python
+          all_branches: true

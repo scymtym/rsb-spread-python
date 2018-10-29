@@ -1,0 +1,9 @@
+/build/
+*.pyc
+.tox/
+/tags
+*.egg-info
+.mypy_cache/
+.python-version
+.coverage
+/cov_html/
